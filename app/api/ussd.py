@@ -6,7 +6,6 @@ from app.models.ussd_session import USSDSession
 from app.models.product import Product
 from app.models.order import Order
 from app.services.mpesa import mpesa_service
-from app.services.africastalking import africastalking_service
 
 router = APIRouter(prefix="", tags=["USSD"])
 
@@ -129,12 +128,6 @@ async def ussd_webhook(
                 phone_number=phoneNumber,
                 amount=total_amount,
                 account_reference=f"Order #{order.id}"
-            )
-            
-            # Also send confirmation SMS
-            await africastalking_service.send_sms(
-                phone_number=phoneNumber,
-                message=f"Order #{order.id} received for KES {total_amount}. Please enter your M-Pesa PIN when prompted."
             )
             
             return Response(
