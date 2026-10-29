@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+import time
 from app.db.session import get_db
 from app.models.order import Order
 
@@ -16,7 +17,6 @@ async def mpesa_callback(payload: dict, db: AsyncSession = Depends(get_db)):
         body = payload.get("Body", {})
         stk_callback = body.get("stkCallback", {})
         result_code = stk_callback.get("ResultCode")
-        merchant_request_id = stk_callback.get("MerchantRequestID")
         checkout_request_id = stk_callback.get("CheckoutRequestID")
         
         meta_data = stk_callback.get("CallbackMetadata", {}).get("Item", [])
@@ -49,3 +49,27 @@ async def mpesa_callback(payload: dict, db: AsyncSession = Depends(get_db)):
         print(f"Error processing M-Pesa callback: {e}")
 
     return {"ResultCode": 0, "ResultDesc": "Accepted"}
+
+@router.post("/simulate/{order_id}")
+async def simulate_mpesa_payment(order_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Local simulation endpoint to instantly mark an order as PAID for testing without waiting for physical M-Pesa prompts.
+    """
+    order = await db.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    order.status = "PAID"
+    order.mpesa_receipt = f"SIM_{order_id}_{int(time.time())}"
+    await db.commit()
+    await db.refresh(order)
+    
+    return {
+        "success": True,
+        "message": f"Order #{order.id} successfully simulated as PAID",
+        "order_id": order.id,
+        "phone_number": order.phone_number,
+        "total_amount": float(order.total_amount),
+        "mpesa_receipt": order.mpesa_receipt,
+        "status": order.status
+    }
